@@ -86,6 +86,40 @@
             gap: 10px;
         }
 
+        /* Generated video */
+
+        .video-card {
+            background: white;
+            padding: 25px;
+            border-radius: 12px;
+            margin-top: 30px;
+            margin-bottom: 25px;
+            text-align: center;
+        }
+
+        .video-card video {
+            width: 100%;
+            max-width: 1000px;
+            border-radius: 10px;
+            background: #000;
+            margin-top: 15px;
+        }
+
+        .download-button {
+            display: inline-block;
+            background: #222;
+            color: white;
+            text-decoration: none;
+            padding: 13px 25px;
+            border-radius: 7px;
+            margin-top: 20px;
+            font-size: 16px;
+        }
+
+        .download-button:hover {
+            opacity: 0.85;
+        }
+
     </style>
 
 </head>
@@ -359,16 +393,58 @@
             {% for subtitle in result.subtitles %}
 
                 <p>
+
                     <strong>
-                        Scene {{ subtitle.scene }}:
+                        Scene {{ subtitle.scene_number }}:
                     </strong>
 
                     {{ subtitle.text }}
+
                 </p>
 
             {% endfor %}
 
         </div>
+
+
+        <!-- GENERATED VIDEO -->
+
+        {% if video_path %}
+
+            <div class="video-card">
+
+                <h2>Generated Video</h2>
+
+                <p>
+                    Your AI-generated video has been created successfully.
+                </p>
+
+                <video controls>
+
+                    <source
+                        src="{{ url_for('video', filename=video_path) }}"
+                        type="video/mp4"
+                    >
+
+                    Your browser does not support the video element.
+
+                </video>
+
+
+                <br>
+
+
+                <a
+                    class="download-button"
+                    href="{{ url_for('video', filename=video_path) }}"
+                    download
+                >
+                    Download Video
+                </a>
+
+            </div>
+
+        {% endif %}
 
 
     {% endif %}
