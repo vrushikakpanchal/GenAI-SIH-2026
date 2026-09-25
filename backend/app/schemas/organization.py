@@ -17,6 +17,13 @@ class TeamBase(BaseModel):
 class TeamCreate(TeamBase):
     pass
 
+class TeamUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+
+class TeamMembershipChange(BaseModel):
+    user_id: str
+
 class TeamResponse(TeamBase):
     id: str
     org_id: str

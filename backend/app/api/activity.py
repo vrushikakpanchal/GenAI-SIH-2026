@@ -19,7 +19,13 @@ def get_activity_log(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    query = db.query(AuditEvent)
+    # Audit history is tenant data. Events without an associated transformation
+    # are intentionally not exposed until they carry an organization reference.
+    query = (
+        db.query(AuditEvent)
+        .join(Transformation, AuditEvent.transformation_id == Transformation.id)
+        .filter(Transformation.org_id == current_user.org_id)
+    )
     if transformation_id:
         query = query.filter(AuditEvent.transformation_id == transformation_id)
     

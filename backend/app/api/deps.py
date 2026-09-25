@@ -52,4 +52,4 @@ def require_roles(allowed_roles: List[str]):
 
 require_admin = require_roles(["admin"])
 require_reviewer = require_roles(["admin", "reviewer"])
-require_operator = require_roles(["admin", "reviewer", "operator"])
+require_operator = require_roles(["admin", "operator"])

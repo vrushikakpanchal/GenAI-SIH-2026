@@ -164,6 +164,9 @@ def test_review_workflow_and_rbac(operator_token, reviewer_token):
     tr_resp = client.post("/api/transformations", headers=op_headers, json={"priority": "high"})
     tr_id = tr_resp.json()["id"]
 
+    assign_resp = client.post(f"/api/transformations/{tr_id}/assign-reviewer", headers=op_headers, json={"reviewer_id": "u-rahul"})
+    assert assign_resp.status_code == 200, assign_resp.text
+
     db = SessionLocal()
     output = Output(
         transformation_id=tr_id,

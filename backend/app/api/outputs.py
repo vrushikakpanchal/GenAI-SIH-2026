@@ -1,4 +1,3 @@
-import hashlib
 from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, status, Response
 from sqlalchemy.orm import Session
@@ -18,12 +17,13 @@ from app.modules.advisory.generator import advisory_generator
 from app.modules.advisory.validator import AdvisoryValidator
 from app.modules.advisory.pdf import AdvisoryPdfGenerator
 from app.api.deps import get_current_user, require_operator
+from app.api.resources import get_output_for_user, get_transformation_for_user, require_transformation_editor
+from app.core.hashing import canonical_sha256
 
 router = APIRouter(tags=["outputs"])
 
 def compute_hash(data: Any) -> str:
-    serialized = str(data).encode("utf-8")
-    return hashlib.sha256(serialized).hexdigest()
+    return canonical_sha256(data)
 
 @router.post("/transformations/{transformation_id}/generate", response_model=OutputResponse)
 async def generate_security_advisory(
@@ -31,9 +31,8 @@ async def generate_security_advisory(
     current_user: User = Depends(require_operator),
     db: Session = Depends(get_db)
 ):
-    transformation = db.query(Transformation).filter(Transformation.id == transformation_id).first()
-    if not transformation:
-        raise HTTPException(status_code=404, detail="Transformation not found")
+    transformation = get_transformation_for_user(db, transformation_id, current_user)
+    require_transformation_editor(transformation, current_user)
 
     source_doc = db.query(SourceDocument).filter(SourceDocument.transformation_id == transformation.id).first()
     if not source_doc:
@@ -158,10 +157,7 @@ def get_output(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    output = db.query(Output).filter(Output.id == output_id).first()
-    if not output:
-        raise HTTPException(status_code=404, detail="Output not found")
-    return output
+    return get_output_for_user(db, output_id, current_user)
 
 @router.patch("/outputs/{output_id}", response_model=OutputResponse)
 def update_output(
@@ -170,11 +166,9 @@ def update_output(
     current_user: User = Depends(require_operator),
     db: Session = Depends(get_db)
 ):
-    output = db.query(Output).filter(Output.id == output_id).first()
-    if not output:
-        raise HTTPException(status_code=404, detail="Output not found")
-
-    transformation = db.query(Transformation).filter(Transformation.id == output.transformation_id).first()
+    output = get_output_for_user(db, output_id, current_user)
+    transformation = get_transformation_for_user(db, output.transformation_id, current_user)
+    require_transformation_editor(transformation, current_user)
     locked_fact = db.query(LockedFact).filter(LockedFact.transformation_id == output.transformation_id).first()
 
     # Bump version and save
@@ -242,6 +236,7 @@ def list_output_versions(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+    get_output_for_user(db, output_id, current_user)
     versions = db.query(OutputVersion).filter(OutputVersion.output_id == output_id).order_by(OutputVersion.version_num.desc()).all()
     results = []
     for v in versions:
@@ -258,6 +253,7 @@ def get_output_version(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+    get_output_for_user(db, output_id, current_user)
     v = db.query(OutputVersion).filter(OutputVersion.output_id == output_id, OutputVersion.version_num == version_num).first()
     if not v:
         raise HTTPException(status_code=404, detail=f"Version {version_num} not found")
@@ -272,9 +268,7 @@ def export_output_pdf(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    output = db.query(Output).filter(Output.id == output_id).first()
-    if not output:
-        raise HTTPException(status_code=404, detail="Output not found")
+    output = get_output_for_user(db, output_id, current_user)
     
     transformation = db.query(Transformation).filter(Transformation.id == output.transformation_id).first()
     metadata = {
@@ -306,9 +300,7 @@ def export_version_pdf(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    output = db.query(Output).filter(Output.id == output_id).first()
-    if not output:
-        raise HTTPException(status_code=404, detail="Output not found")
+    output = get_output_for_user(db, output_id, current_user)
 
     version_rec = db.query(OutputVersion).filter(
         OutputVersion.output_id == output_id,

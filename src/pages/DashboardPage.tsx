@@ -156,8 +156,8 @@ export function DashboardPage() {
               </span>
             </div>
             <dl className="mt-4 space-y-3 text-sm">
-              <Row k="Model" v="Qwen2.5-7B via Ollama" />
-              <Row k="Inference" v="Remote GPU (Kaggle)" />
+              <Row k="Model" v="gpt-oss:120b-cloud via Ollama" />
+              <Row k="Inference" v="Ollama API (http://localhost:11434)" />
               <Row k="Validation" v="Active" />
               <Row k="Audit" v="Database-backed" />
               <Row k="Traceability" v="SHA-256 hashing" />

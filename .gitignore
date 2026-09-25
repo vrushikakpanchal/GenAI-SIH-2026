@@ -29,6 +29,8 @@ dist-ssr
 !.env.example
 
 # Python
+.venv/
+backend/.venv/
 __pycache__/
 *.py[cod]
 *$py.class
@@ -38,4 +40,13 @@ __pycache__/
 *.db
 *.sqlite3
 backend/data/*.db
+*.db-shm
+*.db-wal
 
+# Local database symlink used by development
+/data/
+
+# Nested backup project
+SIH154-2/
+
+datasets/nvdcve-2.0-2026.json

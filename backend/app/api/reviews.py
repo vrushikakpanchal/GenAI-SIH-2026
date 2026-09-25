@@ -18,6 +18,12 @@ from app.schemas.review import (
 )
 from app.schemas.transformation import TransformationResponse
 from app.api.deps import get_current_user, require_reviewer, require_operator
+from app.api.resources import (
+    get_output_for_user,
+    get_transformation_for_user,
+    require_assigned_reviewer,
+    require_transformation_editor,
+)
 
 router = APIRouter(tags=["reviews"])
 
@@ -27,13 +33,11 @@ def submit_for_review(
     current_user: User = Depends(require_operator),
     db: Session = Depends(get_db)
 ):
-    output = db.query(Output).filter(Output.id == output_id).first()
-    if not output:
-        raise HTTPException(status_code=404, detail="Output not found")
-    
-    transformation = db.query(Transformation).filter(Transformation.id == output.transformation_id).first()
-    if not transformation:
-        raise HTTPException(status_code=404, detail="Transformation not found")
+    output = get_output_for_user(db, output_id, current_user)
+    transformation = get_transformation_for_user(db, output.transformation_id, current_user)
+    require_transformation_editor(transformation, current_user)
+    if not transformation.reviewer_id:
+        raise HTTPException(status_code=422, detail="Assign an active reviewer before submitting this output for review")
 
     output.review_status = "awaiting_review"
     output.status = "awaiting_review"
@@ -112,11 +116,9 @@ def add_review_comment(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    output = db.query(Output).filter(Output.id == output_id).first()
-    if not output:
-        raise HTTPException(status_code=404, detail="Output not found")
-    
-    transformation = db.query(Transformation).filter(Transformation.id == output.transformation_id).first()
+    output = get_output_for_user(db, output_id, current_user)
+    transformation = get_transformation_for_user(db, output.transformation_id, current_user)
+    require_assigned_reviewer(transformation, current_user)
     review = db.query(Review).filter(Review.output_id == output.id).first()
 
     comment_rec = ReviewComment(
@@ -151,6 +153,7 @@ def list_review_comments(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+    get_output_for_user(db, output_id, current_user)
     comments = db.query(ReviewComment).filter(ReviewComment.output_id == output_id).order_by(ReviewComment.created_at.asc()).all()
     res = []
     for c in comments:
@@ -166,13 +169,9 @@ def request_changes(
     current_user: User = Depends(require_reviewer),
     db: Session = Depends(get_db)
 ):
-    output = db.query(Output).filter(Output.id == output_id).first()
-    if not output:
-        raise HTTPException(status_code=404, detail="Output not found")
-
-    transformation = db.query(Transformation).filter(Transformation.id == output.transformation_id).first()
-    if not transformation:
-        raise HTTPException(status_code=404, detail="Transformation not found")
+    output = get_output_for_user(db, output_id, current_user)
+    transformation = get_transformation_for_user(db, output.transformation_id, current_user)
+    require_assigned_reviewer(transformation, current_user)
 
     now = datetime.now(timezone.utc)
     output.review_status = "changes_requested"
@@ -224,13 +223,9 @@ def resubmit_for_review(
     current_user: User = Depends(require_operator),
     db: Session = Depends(get_db)
 ):
-    output = db.query(Output).filter(Output.id == output_id).first()
-    if not output:
-        raise HTTPException(status_code=404, detail="Output not found")
-
-    transformation = db.query(Transformation).filter(Transformation.id == output.transformation_id).first()
-    if not transformation:
-        raise HTTPException(status_code=404, detail="Transformation not found")
+    output = get_output_for_user(db, output_id, current_user)
+    transformation = get_transformation_for_user(db, output.transformation_id, current_user)
+    require_transformation_editor(transformation, current_user)
 
     now = datetime.now(timezone.utc)
     output.review_status = "awaiting_review"
@@ -272,13 +267,9 @@ def approve_output(
     current_user: User = Depends(require_reviewer),
     db: Session = Depends(get_db)
 ):
-    output = db.query(Output).filter(Output.id == output_id).first()
-    if not output:
-        raise HTTPException(status_code=404, detail="Output not found")
-
-    transformation = db.query(Transformation).filter(Transformation.id == output.transformation_id).first()
-    if not transformation:
-        raise HTTPException(status_code=404, detail="Transformation not found")
+    output = get_output_for_user(db, output_id, current_user)
+    transformation = get_transformation_for_user(db, output.transformation_id, current_user)
+    require_assigned_reviewer(transformation, current_user)
 
     now = datetime.now(timezone.utc)
     output.review_status = "approved"

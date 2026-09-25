@@ -10,6 +10,7 @@ from app.models.audit import AuditEvent
 from app.models.notification import Notification
 from app.schemas.transformation import TransformationCreate, TransformationResponse
 from app.api.deps import get_current_user, require_operator
+from app.api.resources import get_transformation_for_user, require_transformation_editor
 
 router = APIRouter(prefix="/transformations", tags=["transformations"])
 
@@ -26,6 +27,8 @@ def list_transformations(
     db: Session = Depends(get_db)
 ):
     query = db.query(Transformation).filter(Transformation.org_id == current_user.org_id)
+    if current_user.role == "viewer":
+        query = query.filter(Transformation.status.in_(["approved", "published", "verified"]))
     if status:
         query = query.filter(Transformation.status == status)
     if team_id:
@@ -61,12 +64,17 @@ def create_transformation(
     code = f"TR-{next_num}"
 
     team_id = payload.team_id
+    if team_id:
+        from app.models.organization import Team
+        team = db.query(Team).filter(Team.id == team_id, Team.org_id == current_user.org_id).first()
+        if not team:
+            raise HTTPException(status_code=404, detail="Team not found")
     if not team_id:
         # Default to user's first team membership
         if current_user.team_memberships:
             team_id = current_user.team_memberships[0].team_id
         else:
-            team_id = "t-ti"
+            team_id = None
 
     transformation = Transformation(
         code=code,
@@ -101,10 +109,7 @@ def get_transformation(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    item = db.query(Transformation).filter(Transformation.id == id, Transformation.org_id == current_user.org_id).first()
-    if not item:
-        raise HTTPException(status_code=404, detail="Transformation not found")
-    return item
+    return get_transformation_for_user(db, id, current_user)
 
 @router.post("/{id}/assign-reviewer", response_model=TransformationResponse)
 def assign_reviewer(
@@ -113,13 +118,12 @@ def assign_reviewer(
     current_user: User = Depends(require_operator),
     db: Session = Depends(get_db)
 ):
-    transformation = db.query(Transformation).filter(Transformation.id == id).first()
-    if not transformation:
-        raise HTTPException(status_code=404, detail="Transformation not found")
+    transformation = get_transformation_for_user(db, id, current_user)
+    require_transformation_editor(transformation, current_user)
 
-    reviewer = db.query(User).filter(User.id == payload.reviewer_id).first()
-    if not reviewer:
-        raise HTTPException(status_code=404, detail="Reviewer user not found")
+    reviewer = db.query(User).filter(User.id == payload.reviewer_id, User.org_id == current_user.org_id).first()
+    if not reviewer or reviewer.role not in {"reviewer", "admin"} or reviewer.status != "active":
+        raise HTTPException(status_code=422, detail="Reviewer must be an active reviewer or administrator in this organization")
 
     transformation.reviewer_id = reviewer.id
 

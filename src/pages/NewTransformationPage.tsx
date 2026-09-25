@@ -172,7 +172,7 @@ export function NewTransformationPage() {
     if (!transformationId || !source) return;
     setGenError(null);
     setPhase("generating");
-    setGenStage("Connecting to remote Qwen 2.5:14b via Ollama...");
+    setGenStage("Connecting to Ollama (gpt-oss:120b-cloud)...");
 
     try {
       setGenStage("Grounding prompt with verified technical facts & executing inference...");
@@ -184,7 +184,7 @@ export function NewTransformationPage() {
     } catch (err: any) {
       setGenError(
         err.message ||
-          "Generation failed. Check that remote Ollama / ngrok tunnel is online and responding."
+          "Generation failed. Check that Ollama engine is online and responding."
       );
       setPhase("intake");
     }
@@ -201,7 +201,7 @@ export function NewTransformationPage() {
           <div>
             <h1 className="text-2xl font-bold text-ink">Generating Security Advisory</h1>
             <p className="mt-2 text-sm text-ink-muted">
-              Processing source intelligence through remote Qwen 2.5 14B with zero-hallucination fact locks.
+              Processing source intelligence through gpt-oss:120b-cloud via Ollama with zero-hallucination fact locks.
             </p>
           </div>
 
@@ -213,7 +213,7 @@ export function NewTransformationPage() {
               <span className="font-medium text-ink">{genStage}</span>
             </div>
             <div className="mt-4 space-y-2 text-xs text-ink-muted">
-              <p>• Model: <span className="font-mono text-ink">qwen2.5:14b</span></p>
+              <p>• Model: <span className="font-mono text-ink">gpt-oss:120b-cloud</span></p>
               <p>• Architecture: Deterministic Extraction → Grounded Prompt → Pydantic Schema</p>
               <p>• Safety: Untrusted boundary delimiters active</p>
             </div>
@@ -528,7 +528,7 @@ export function NewTransformationPage() {
                 Zero-Hallucination AI Grounding Active
               </div>
               <p className="mt-1.5 text-indigo-800 leading-relaxed">
-                Qwen 2.5 14B runs in strict JSON-mode with prompt-injection defenses. All CVE IDs, CVSS scores, and indicators are strictly bounded by deterministic facts.
+                gpt-oss:120b-cloud runs in strict JSON-mode with prompt-injection defenses. All CVE IDs, CVSS scores, and indicators are strictly bounded by deterministic facts.
               </p>
             </div>
           </div>

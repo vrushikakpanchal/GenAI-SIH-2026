@@ -5,11 +5,31 @@ from app.core.database import get_db
 from app.models.organization import Organization, Team, TeamMembership
 from app.models.user import User
 from app.models.transformation import Transformation
-from app.schemas.organization import OrganizationResponse, TeamResponse, TeamCreate
+from app.schemas.organization import OrganizationResponse, TeamResponse, TeamCreate, TeamUpdate, TeamMembershipChange
 from app.schemas.user import UserResponse, UserUpdate
 from app.api.deps import get_current_user, require_admin
 
 router = APIRouter(tags=["organization"])
+
+
+def _get_team(db: Session, team_id: str, org_id: str) -> Team:
+    team = db.query(Team).filter(Team.id == team_id, Team.org_id == org_id).first()
+    if not team:
+        raise HTTPException(status_code=404, detail="Team not found")
+    return team
+
+
+def _team_response(db: Session, team: Team) -> TeamResponse:
+    return TeamResponse(
+        id=team.id,
+        org_id=team.org_id,
+        name=team.name,
+        description=team.description or "",
+        member_ids=[membership.user_id for membership in team.memberships],
+        active_work=db.query(Transformation).filter(Transformation.team_id == team.id, Transformation.status.in_(["draft", "processing", "changes_requested"])).count(),
+        pending_reviews=db.query(Transformation).filter(Transformation.team_id == team.id, Transformation.status == "awaiting_review").count(),
+        created_at=team.created_at,
+    )
 
 @router.get("/organization", response_model=OrganizationResponse)
 def get_organization(
@@ -38,16 +58,7 @@ def list_teams(
             Transformation.team_id == t.id,
             Transformation.status == "awaiting_review"
         ).count()
-        res.append(TeamResponse(
-            id=t.id,
-            org_id=t.org_id,
-            name=t.name,
-            description=t.description or "",
-            member_ids=member_ids,
-            active_work=active_work,
-            pending_reviews=pending_reviews,
-            created_at=t.created_at
-        ))
+        res.append(_team_response(db, t))
     return res
 
 @router.post("/teams", response_model=TeamResponse)
@@ -64,16 +75,51 @@ def create_team(
     db.add(team)
     db.commit()
     db.refresh(team)
-    return TeamResponse(
-        id=team.id,
-        org_id=team.org_id,
-        name=team.name,
-        description=team.description,
-        member_ids=[],
-        active_work=0,
-        pending_reviews=0,
-        created_at=team.created_at
-    )
+    return _team_response(db, team)
+
+
+@router.patch("/teams/{team_id}", response_model=TeamResponse)
+def update_team(team_id: str, payload: TeamUpdate, current_user: User = Depends(require_admin), db: Session = Depends(get_db)):
+    team = _get_team(db, team_id, current_user.org_id)
+    if payload.name is not None:
+        team.name = payload.name.strip()
+    if payload.description is not None:
+        team.description = payload.description.strip()
+    db.commit()
+    db.refresh(team)
+    return _team_response(db, team)
+
+
+@router.post("/teams/{team_id}/members", response_model=TeamResponse)
+def add_team_member(team_id: str, payload: TeamMembershipChange, current_user: User = Depends(require_admin), db: Session = Depends(get_db)):
+    team = _get_team(db, team_id, current_user.org_id)
+    user = db.query(User).filter(User.id == payload.user_id, User.org_id == current_user.org_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if not db.query(TeamMembership).filter(TeamMembership.team_id == team.id, TeamMembership.user_id == user.id).first():
+        db.add(TeamMembership(team_id=team.id, user_id=user.id))
+        db.commit()
+    return _team_response(db, team)
+
+
+@router.delete("/teams/{team_id}/members/{user_id}", response_model=TeamResponse)
+def remove_team_member(team_id: str, user_id: str, current_user: User = Depends(require_admin), db: Session = Depends(get_db)):
+    team = _get_team(db, team_id, current_user.org_id)
+    membership = db.query(TeamMembership).filter(TeamMembership.team_id == team.id, TeamMembership.user_id == user_id).first()
+    if not membership:
+        raise HTTPException(status_code=404, detail="Team membership not found")
+    db.delete(membership)
+    db.commit()
+    return _team_response(db, team)
+
+
+@router.delete("/teams/{team_id}", status_code=204)
+def delete_team(team_id: str, current_user: User = Depends(require_admin), db: Session = Depends(get_db)):
+    team = _get_team(db, team_id, current_user.org_id)
+    if db.query(Transformation).filter(Transformation.team_id == team.id).count():
+        raise HTTPException(status_code=409, detail="Team has transformation history and cannot be deleted. Reassign active work first.")
+    db.delete(team)
+    db.commit()
 
 @router.get("/users", response_model=List[UserResponse])
 def list_users(
@@ -117,6 +163,8 @@ def update_user(
     if payload.status is not None:
         user.status = payload.status
     if payload.team_id is not None:
+        if payload.team_id:
+            _get_team(db, payload.team_id, current_user.org_id)
         # Update team membership
         db.query(TeamMembership).filter(TeamMembership.user_id == user.id).delete()
         if payload.team_id:

@@ -10,6 +10,7 @@ from app.models.audit import AuditEvent
 from app.models.integration import Integration
 from app.models.template import AdvisoryTemplate
 from app.models.rag import RagRecord, RagIngestion
+from app.models.access import Invitation, PasswordResetToken
 
 __all__ = [
     "Base",
@@ -30,4 +31,6 @@ __all__ = [
     "AdvisoryTemplate",
     "RagRecord",
     "RagIngestion",
+    "Invitation",
+    "PasswordResetToken",
 ]

@@ -11,6 +11,7 @@ from app.schemas.source import SourceDocumentResponse, LockedFactResponse
 from app.services.source_parser import SourceParser, compute_sha256
 from app.modules.advisory.extractor import FactExtractor
 from app.api.deps import get_current_user, require_operator
+from app.api.resources import get_transformation_for_user, require_transformation_editor
 
 router = APIRouter(tags=["sources"])
 
@@ -34,9 +35,8 @@ async def upload_source_file(
     current_user: User = Depends(require_operator),
     db: Session = Depends(get_db)
 ):
-    transformation = db.query(Transformation).filter(Transformation.id == transformation_id).first()
-    if not transformation:
-        raise HTTPException(status_code=404, detail="Transformation not found")
+    transformation = get_transformation_for_user(db, transformation_id, current_user)
+    require_transformation_editor(transformation, current_user)
 
     content_bytes = await file.read()
     try:
@@ -132,9 +132,8 @@ def paste_source_text(
     current_user: User = Depends(require_operator),
     db: Session = Depends(get_db)
 ):
-    transformation = db.query(Transformation).filter(Transformation.id == transformation_id).first()
-    if not transformation:
-        raise HTTPException(status_code=404, detail="Transformation not found")
+    transformation = get_transformation_for_user(db, transformation_id, current_user)
+    require_transformation_editor(transformation, current_user)
 
     content_bytes = payload.text.encode("utf-8")
     try:
@@ -227,6 +226,7 @@ def get_locked_facts(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+    get_transformation_for_user(db, transformation_id, current_user)
     fact = db.query(LockedFact).filter(LockedFact.transformation_id == transformation_id).first()
     if not fact:
         raise HTTPException(status_code=404, detail="Locked facts not found for this transformation")

@@ -17,7 +17,7 @@ class OllamaClient:
         }
 
     async def check_health(self) -> Dict[str, Any]:
-        """Verify connectivity to remote Kaggle / ngrok Ollama instance."""
+        """Verify connectivity to configured Ollama instance."""
         start_time = time.time()
         try:
             async with httpx.AsyncClient(timeout=15.0, headers=self.headers, http2=False) as client:
@@ -45,21 +45,21 @@ class OllamaClient:
                     "available_models": models,
                     "base_url": self.base_url,
                     "latency_ms": latency_ms,
-                    "detail": "Connected to remote Ollama engine." if model_found else f"Ollama is online but model '{self.model}' was not found in tags."
+                    "detail": "Connected to Ollama engine." if model_found else f"Ollama is online but model '{self.model}' was not found in tags."
                 }
         except httpx.ConnectTimeout:
             return {
                 "online": False,
                 "model": self.model,
                 "base_url": self.base_url,
-                "detail": "Connection timed out. Kaggle GPU session or ngrok tunnel may be inactive."
+                "detail": "Connection timed out connecting to Ollama at " + self.base_url
             }
         except httpx.ConnectError:
             return {
                 "online": False,
                 "model": self.model,
                 "base_url": self.base_url,
-                "detail": "Could not connect to Ollama. Check OLLAMA_BASE_URL or ngrok tunnel status."
+                "detail": "Could not connect to Ollama. Check OLLAMA_BASE_URL."
             }
         except Exception as e:
             return {
@@ -97,26 +97,18 @@ class OllamaClient:
                         raise RuntimeError("Ollama returned an empty response.")
                     return response_text
 
-                if "ERR_NGROK_3200" in resp.text:
-                    raise RuntimeError(
-                        "Remote ngrok tunnel offline (ERR_NGROK_3200). "
-                        "Your Kaggle notebook may have timed out or generated a new ngrok URL. "
-                        "Please check your Kaggle notebook, restart the ngrok tunnel, and update OLLAMA_BASE_URL in backend/.env."
-                    )
-
-                # Retry gateway failures, which occur while a hosted Ollama
-                # runtime is waking up. Other status codes are deterministic
+                # Retry gateway/transient failures. Other status codes are deterministic
                 # request failures and must be returned immediately.
                 if resp.status_code not in {429, 502, 503, 504}:
                     raise RuntimeError(f"Ollama returned HTTP {resp.status_code}: {resp.text[:200]}")
                 failure = RuntimeError(f"Ollama returned HTTP {resp.status_code}: {resp.text[:200]}")
             except (httpx.ConnectError, httpx.ConnectTimeout) as exc:
                 failure = RuntimeError(
-                    f"AI engine unavailable. Check the Ollama/Kaggle connection: {str(exc)}"
+                    f"AI engine unavailable. Check the Ollama connection ({self.base_url}): {str(exc)}"
                 )
             except httpx.ReadTimeout:
                 failure = RuntimeError(
-                    f"AI generation timed out after {self.timeout}s waiting for Kaggle GPU response. "
+                    f"AI generation timed out after {self.timeout}s waiting for Ollama response ({self.model}). "
                     "The model may be cold-starting or prompt is too long."
                 )
             except RuntimeError:
@@ -126,8 +118,7 @@ class OllamaClient:
                 raise RuntimeError(f"AI generation failed: {err_msg}") from exc
 
             if attempt < self.max_retries:
-                # Small bounded backoff keeps the request responsive while
-                # allowing a transient ngrok/Kaggle connection to recover.
+                # Bounded backoff for transient connection recovery.
                 await asyncio.sleep(attempt + 1)
                 continue
             raise failure

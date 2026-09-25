@@ -34,11 +34,11 @@ export function SettingsPage() {
       </Card>
 
       <Card title="AI Engine">
-        <Row k="Model" v="qwen2.5:14b (Kaggle T4)" />
-        <Row k="Status" v="Connected via ngrok" />
-        <Row k="Inference" v="Remote Ollama" />
+        <Row k="Model" v="gpt-oss:120b-cloud" />
+        <Row k="Status" v="Connected via Ollama" />
+        <Row k="Inference" v="Ollama API (http://localhost:11434)" />
         <Row k="Validation" v="Pydantic v2 + fact-lock" />
-        <Row k="RAG" v="Disabled (coming soon)" />
+        <Row k="RAG" v="Active (CVE/NVD + CISA KEV + CAPEC)" />
         <Row k="Provenance" v="SHA-256 hash chain" />
       </Card>
 

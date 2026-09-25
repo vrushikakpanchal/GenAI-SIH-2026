@@ -1,7 +1,9 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
-from app.core.database import Base, engine
+from app.core.migrations import verify_schema
 from app.api import (
     auth,
     organization,
@@ -13,21 +15,29 @@ from app.api import (
     activity,
     notifications,
     rag,
+    integrations,
+    access,
 )
 
-# Initialize all tables
-Base.metadata.create_all(bind=engine)
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    # Schema changes are explicit: production startup only verifies the schema
+    # and never creates or mutates application tables implicitly.
+    verify_schema()
+    yield
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
     openapi_url=f"{settings.API_V1_STR}/openapi.json",
     docs_url=f"{settings.API_V1_STR}/docs",
+    lifespan=lifespan,
 )
 
 # CORS configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:3000"],
+    allow_origins=settings.cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -44,6 +54,8 @@ app.include_router(reviews.router,          prefix=settings.API_V1_STR)
 app.include_router(activity.router,         prefix=settings.API_V1_STR)
 app.include_router(notifications.router,    prefix=settings.API_V1_STR)
 app.include_router(rag.router,              prefix=settings.API_V1_STR)
+app.include_router(integrations.router,     prefix=settings.API_V1_STR)
+app.include_router(access.router,           prefix=settings.API_V1_STR)
 
 
 @app.get("/")
